@@ -14,65 +14,101 @@ function Np(fn) {
 }
 
 Np.prototype.resolve = function (value) {
-  if (this.state) return;
-  if (value && typeof value.then === 'function') {
-    value.then(value => this.resolve(value),reason=>this.reject(reason));
-  } else {
-    this.state = 1;
-    this.value = value;
-    this.onFulfilledFns.forEach(fn => fn(value));
-  }
+  setImmediate(() => {
+    if (this.state) return;
+    if (value && typeof value.then === 'function') {
+      value.then(value => this.resolve(value), reason => this.reject(reason));
+    } else {
+      this.state = 1;
+      this.value = value;
+      this.onFulfilledFns.forEach(fn => fn(value));
+    }
+  });
 };
 
 Np.prototype.reject = function (reason) {
-  if (this.state) return;
-  if (reason && typeof reason.then === 'function') {
-    reason.then(value => this.reject(value), reason => this.reject(reason));
-  } else {
-    this.state  = 2;
-    this.reason = reason;
-    this.onRejectedFns.forEach(fn => fn(reason));
-  }
+  setImmediate(() => {
+    if (this.state) return;
+//    if (reason && typeof reason.then === 'function') {
+//      reason.then(value => this.reject(value), reason => this.reject(reason));
+//    } else {
+      this.state  = 2;
+      this.reason = reason;
+      this.onRejectedFns.forEach(fn => fn(reason));
+//    }
+  });
 };
 
 Np.prototype.then = function (onFulfilled, onRejected) {
-  console.log(this.state,this.value,this.reason,onFulfilled,onRejected);
+//  console.log(this.state,this.value,this.reason,onFulfilled,onRejected);
+//  if (typeof onFulfilled !=='function') throw new Error('axxx');
+//  if (arguments.length>1 && typeof onRejected!=='function') throw new Error('ssss');
+
   const self = this;
-  if (this.state === 1 && typeof onFulfilled === 'function') return Np.resolve(onFulfilled(this.value));
-  if (this.state === 2 && typeof onRejected === 'function') return Np.resolve(onRejected(this.reason));
+  if (this.state === 1) {
+    if (typeof onFulfilled === 'function')
+      return new Np((resolve, reject) => {
+        setImmediate(() => {
+          try {
+            resolve(onFulfilled(this.value))
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+    else
+      return Np.resolve(this.value);
+  }
+  if (this.state === 2) {
+    if (typeof onRejected === 'function')
+      return new Np((resolve, reject) => {
+        setImmediate(() => {
+          try {
+            resolve(onRejected(this.reason))
+          } catch (err) {
+            reject(err);
+          }
+        });
+      });
+    else
+      return Np.reject(this.reason);
+  }
 
   return new Np(function (resolve, reject) {
     self.onFulfilledFns.push(function (value) {
-      typeof onFulfilled === 'function' ?
-        resolve(onFulfilled(value)) :
-        resolve(value);
+      try {
+        typeof onFulfilled === 'function' ?
+          resolve(onFulfilled(value)) :
+          resolve(value);
+      } catch (err) {
+        reject(err);
+      }
     });
     self.onRejectedFns.push(function (reason) {
-      typeof onRejected === 'function' ?
-        resolve(onRejected(reason)) :
-        reject(reason);
+      try {
+        typeof onRejected === 'function' ?
+          resolve(onRejected(reason)) :
+          reject(reason);
+      }catch (err){
+        reject(err);
+      }
     })
   });
 };
 
-Np.prototype.catch = function (onRejected) {
-  const self = this;
-  return new Np(function (resolve, reject) {
-    self.onRejectedFns.push(function (reason) {
-      resolve(onRejected(reason));
-    })
-  });
-};
+//Np.prototype.catch = function (onRejected) {
+//  const self = this;
+//  return new Np(function (resolve, reject) {
+//    self.onRejectedFns.push(function (reason) {
+//      resolve(onRejected(reason));
+//    })
+//  });
+//};
 
 Np.resolve = function (value) {
   if (value && typeof value.then === 'function') {
     return new Np(function (resolve, reject) {
       value.then(resolve, reject);
-    });
-  }
-  if (value && typeof value.catch === 'function') {
-    return new Np(function (resolve, reject) {
-      value.catch(reject);
     });
   }
 
@@ -87,11 +123,6 @@ Np.reject = function (reason) {
       reason.then(reject, reject);
     });
   }
-  if (reason && typeof reason.catch === 'function') {
-    return new Np(function (resolve, reject) {
-      reason.catch(reject);
-    });
-  }
 
   const p = new Np();
   p.reject(reason);
@@ -102,6 +133,8 @@ module.exports = Np;
 
 //new Np(function (resolve, reject) {
 //  setTimeout(function () {
-//    reject(123);
+//    resolve(123);
 //  }, 500);
-//}).then(i => i + 1, i => Np.reject(2333)).then(console.log, console.error);
+//}).then(1,2).then(console.log, console.error);
+
+//Np.reject(1222).then(() => {}, undefined).then(undefined, console.error);
