@@ -9,37 +9,54 @@ function Np(fn) {
   this.onFulfilledFns = [];
   this.onRejectedFns  = [];
   if (fn) {
-    fn(this.resolve.bind(this), this.reject.bind(this));
+    try {
+      fn(this.resolve.bind(this), this.reject.bind(this));
+    } catch (err) {
+      this.state  = 2;
+      this.reason = err;
+    }
   }
 }
 
 Np.prototype.resolve = function (value) {
+  console.log('resolve', this, value);
   setImmediate(() => {
+
     if (this.state) return;
-    if (value && typeof value.then === 'function') {
-      value.then(value => this.resolve(value), reason => this.reject(reason));
-    } else {
-      this.state = 1;
-      this.value = value;
-      this.onFulfilledFns.forEach(fn => fn(value));
+    if (value === this) this.reject(new TypeError('same object'));
+
+    if (value) {
+      try {
+        let then = value.then;
+        if (typeof then === 'function')
+          return then.bind(value)(value => this.resolve(value), reason => this.reject(reason));
+      } catch (err) {
+        return this.reject(err);
+      }
     }
+    console.log('resolve no thenable value', value);
+    this.state = 1;
+    this.value = value;
+    this.onFulfilledFns.forEach(fn => fn(value));
   });
 };
 
 Np.prototype.reject = function (reason) {
   setImmediate(() => {
     if (this.state) return;
+    if (reason === this) this.reject(new TypeError('same object'));
 //    if (reason && typeof reason.then === 'function') {
 //      reason.then(value => this.reject(value), reason => this.reject(reason));
 //    } else {
-      this.state  = 2;
-      this.reason = reason;
-      this.onRejectedFns.forEach(fn => fn(reason));
+    this.state  = 2;
+    this.reason = reason;
+    this.onRejectedFns.forEach(fn => fn(reason));
 //    }
   });
 };
 
 Np.prototype.then = function (onFulfilled, onRejected) {
+  console.log('then', this, onFulfilled, onRejected)
 //  console.log(this.state,this.value,this.reason,onFulfilled,onRejected);
 //  if (typeof onFulfilled !=='function') throw new Error('axxx');
 //  if (arguments.length>1 && typeof onRejected!=='function') throw new Error('ssss');
@@ -77,6 +94,7 @@ Np.prototype.then = function (onFulfilled, onRejected) {
   return new Np(function (resolve, reject) {
     self.onFulfilledFns.push(function (value) {
       try {
+        console.log('then return new Np get value', value, typeof onFulfilled === 'function');
         typeof onFulfilled === 'function' ?
           resolve(onFulfilled(value)) :
           resolve(value);
@@ -89,7 +107,7 @@ Np.prototype.then = function (onFulfilled, onRejected) {
         typeof onRejected === 'function' ?
           resolve(onRejected(reason)) :
           reject(reason);
-      }catch (err){
+      } catch (err) {
         reject(err);
       }
     })
@@ -138,3 +156,17 @@ module.exports = Np;
 //}).then(1,2).then(console.log, console.error);
 
 //Np.reject(1222).then(() => {}, undefined).then(undefined, console.error);
+
+function xFactory() {
+  return Object.create(Object.prototype, {
+    then: {
+      get: function () {
+        throw undefined;
+      }
+    }
+  });
+}
+
+return Np.resolve(123456).then(function (v) {
+  return xFactory();
+}).then(console.log, console.error)
