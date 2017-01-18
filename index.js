@@ -19,14 +19,14 @@ function Np(fn) {
 }
 
 Np.prototype.resolve = function (value) {
-  console.log('resolve', this, value);
+
   setImmediate(() => {
 
     if (this.state) return;
     if (value === this) this.reject(new TypeError('same object'));
 
     let hasBeenCalled = false;
-    if (value) {
+    if (value && (typeof value === 'object' || typeof value === 'function')) {
       try {
 
         let then = value.then;
@@ -46,7 +46,7 @@ Np.prototype.resolve = function (value) {
         return this.reject(err);
       }
     }
-    console.log('resolve no thenable value', value);
+
     this.state = 1;
     this.value = value;
     this.onFulfilledFns.forEach(fn => fn(value));
@@ -68,8 +68,8 @@ Np.prototype.reject = function (reason) {
 };
 
 Np.prototype.then = function (onFulfilled, onRejected) {
-  console.log('then', this, onFulfilled, onRejected)
-//  console.log(this.state,this.value,this.reason,onFulfilled,onRejected);
+
+
 //  if (typeof onFulfilled !=='function') throw new Error('axxx');
 //  if (arguments.length>1 && typeof onRejected!=='function') throw new Error('ssss');
 
@@ -106,7 +106,7 @@ Np.prototype.then = function (onFulfilled, onRejected) {
   return new Np(function (resolve, reject) {
     self.onFulfilledFns.push(function (value) {
       try {
-        console.log('then return new Np get value', value, typeof onFulfilled === 'function');
+
         typeof onFulfilled === 'function' ?
           resolve(onFulfilled(value)) :
           resolve(value);
@@ -122,18 +122,9 @@ Np.prototype.then = function (onFulfilled, onRejected) {
       } catch (err) {
         reject(err);
       }
-    })
+    });
   });
 };
-
-//Np.prototype.catch = function (onRejected) {
-//  const self = this;
-//  return new Np(function (resolve, reject) {
-//    self.onRejectedFns.push(function (reason) {
-//      resolve(onRejected(reason));
-//    })
-//  });
-//};
 
 Np.resolve = function (value) {
   if (value && typeof value.then === 'function') {
@@ -160,23 +151,3 @@ Np.reject = function (reason) {
 };
 
 module.exports = Np;
-
-//new Np(function (resolve, reject) {
-//  setTimeout(function () {
-//    resolve(123);
-//  }, 500);
-//}).then(1,2).then(console.log, console.error);
-
-//Np.reject(1222).then(() => {}, undefined).then(undefined, console.error);
-
-function xFactory() {
-  return Object.create(Object.prototype, {
-    then: function () {
-
-    }
-  });
-}
-
-return Np.resolve(123456).then(function (v) {
-  return xFactory();
-}).then(console.log, console.error)
