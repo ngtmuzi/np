@@ -27,7 +27,7 @@ class Np {
 
     process.nextTick(() => {
       if (value && (typeof value === 'object' || typeof value === 'function')) {
-        let isCalled = 0;
+        let isCalled = 0; //保证resolve或reject只调用一次
         try {
           let then = value.then;
           if (typeof then === 'function')
@@ -50,6 +50,7 @@ class Np {
   reject(reason) {
     if (this.state) return;
     if (reason === this) this.reject(new TypeError('same object'));
+
     process.nextTick(() => {
       this.state  = 2;
       this.reason = reason;
@@ -90,8 +91,38 @@ class Np {
       });
     });
   }
+
+  catch(onRejected) {
+    return this.then(null, onRejected);
+  }
 }
 
+
+Np.all = array => {
+  if (!Array.isArray(array)) return Np.reject(new TypeError('no array'));
+  return new Np((resolve, reject) => {
+    const total  = array.length;
+    const result = new Array(total);
+    let succeed  = 0;
+
+    array.forEach((item, idx) =>
+      Np.resolve(item)
+        .then(value => {
+          result[idx] = value;
+          succeed++;
+          if (succeed === total) resolve(result);
+        })
+        .catch(reject)
+    );
+  });
+};
+
+Np.race = array => {
+  if (!Array.isArray(array)) return Np.reject(new TypeError('no array'));
+  return new Np((resolve, reject) => {
+    array.forEach(item => Np.resolve(item).then(resolve).catch(reject));
+  });
+};
 
 Np.resolve = value => {
   const p = new Np();
