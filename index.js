@@ -25,12 +25,24 @@ Np.prototype.resolve = function (value) {
     if (this.state) return;
     if (value === this) this.reject(new TypeError('same object'));
 
+    let hasBeenCalled = false;
     if (value) {
       try {
+
         let then = value.then;
         if (typeof then === 'function')
-          return then.bind(value)(value => this.resolve(value), reason => this.reject(reason));
+          return then.bind(value)(value => {
+            if (hasBeenCalled) return;
+            hasBeenCalled = true;
+            this.resolve(value);
+          }, reason => {
+            if (hasBeenCalled) return;
+            hasBeenCalled = true;
+            this.reject(reason);
+          });
       } catch (err) {
+        if (hasBeenCalled) return;
+        hasBeenCalled = true;
         return this.reject(err);
       }
     }
@@ -159,10 +171,8 @@ module.exports = Np;
 
 function xFactory() {
   return Object.create(Object.prototype, {
-    then: {
-      get: function () {
-        throw undefined;
-      }
+    then: function () {
+
     }
   });
 }
