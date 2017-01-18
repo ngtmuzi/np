@@ -10,12 +10,11 @@ class Np {
     this.state     = 0;
     this.callbacks = [];
 
-    if (fn) {
+    if (typeof fn === 'function') {
       try {
         fn(this.resolve.bind(this), this.reject.bind(this));
       } catch (err) {
-        this.state  = 2;
-        this.reason = err;
+        this.reject(err);
       }
     }
   }
@@ -32,8 +31,8 @@ class Np {
           let then = value.then;
           if (typeof then === 'function')
             return then.bind(value)(
-              value => !isCalled++ ? this.resolve(value) : 0,
-              reason => !isCalled++ ? this.reject(reason) : 0
+              value => !isCalled++ ? this.resolve(value) : null,
+              reason => !isCalled++ ? this.reject(reason) : null
             );
         } catch (err) {
           if (!isCalled++) this.reject(err);
@@ -58,37 +57,31 @@ class Np {
     });
   }
 
-
   then(onFulfilled, onRejected) {
-
-    if (this.state === 1) {
-      return (typeof onFulfilled === 'function') ?
-        Np.resolve({then: () => onFulfilled(this.value)}) :
-        this;
-    }
-    if (this.state === 2) {
-      return (typeof onRejected === 'function') ?
-        Np.resolve({then: () => onRejected(this.reason)}) :
-        this;
-    }
-
     return new Np((resolve, reject) => {
-      this.callbacks.push((promise) => {
-        try {
-          if (this.state === 1) {
-            resolve(typeof onFulfilled === 'function' ?
-              onFulfilled(this.value) :
-              this.value);
-          } else {
-            if (typeof onRejected === 'function')
-              resolve(onRejected(this.reason));
-            else
-              reject(this.reason);
+      const doWork = () => {
+        process.nextTick(() => {
+          try {
+            if (this.state === 1) {
+              if (typeof onFulfilled === 'function')
+                resolve(onFulfilled(this.value));
+              else
+                resolve(this.value);
+            }
+            if (this.state === 2) {
+              if (typeof onRejected === 'function')
+                resolve(onRejected(this.reason));
+              else
+                reject(this.reason);
+            }
+          } catch (e) {
+            reject(e);
           }
-        } catch (e) {
-          reject(e);
-        }
-      });
+        });
+      };
+
+      if (this.state) doWork();
+      else this.callbacks.push(doWork);
     });
   }
 
