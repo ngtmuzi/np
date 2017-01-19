@@ -21,10 +21,10 @@ class Np {
 
   //实现2.3 The Promise Resolution Procedure部分
   resolve(value) {
-    if (this.state) return;
-    if (value === this) this.reject(new TypeError('same object'));
-
     process.nextTick(() => {
+      if (this.state) return;
+      if (value === this) this.reject(new TypeError('same object'));
+
       if (value && (typeof value === 'object' || typeof value === 'function')) {
         let isCalled = 0; //保证resolve或reject只调用一次
         try {
@@ -47,10 +47,10 @@ class Np {
   }
 
   reject(reason) {
-    if (this.state) return;
-    if (reason === this) this.reject(new TypeError('same object'));
-
     process.nextTick(() => {
+      if (this.state) return;
+      if (reason === this) this.reject(new TypeError('same object'));
+
       this.state  = 2;
       this.reason = reason;
       this.callbacks.forEach(fn => fn(this));
